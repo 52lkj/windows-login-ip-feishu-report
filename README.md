@@ -2,6 +2,16 @@
 
 PowerShell script to collect today's successful Windows login IPs, probe the server public IP, and send a daily summary to a Feishu group.
 
+## Quick Deploy
+
+Run this on the target Windows server:
+
+```powershell
+irm https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.ps1 | iex
+```
+
+It will download the repository, ask for your Feishu webhook if needed, and install the daily task.
+
 ## Usage
 
 ```powershell
