@@ -2,7 +2,8 @@
 param(
     [string]$Repository = '52lkj/windows-login-ip-feishu-report',
     [string]$Branch = 'main',
-    [string]$WebhookUrl
+    [string]$WebhookUrl,
+    [string]$ArchiveUrl
 )
 
 if ([string]::IsNullOrWhiteSpace($WebhookUrl)) {
@@ -17,8 +18,12 @@ $repoRoot = Join-Path $extractRoot 'windows-login-ip-feishu-report'
 
 New-Item -ItemType Directory -Path $tempRoot, $extractRoot -Force | Out-Null
 
-$archiveUrl = "https://codeload.github.com/$Repository/zip/refs/heads/$Branch"
-Invoke-WebRequest -Uri $archiveUrl -OutFile $zipPath
+if ([string]::IsNullOrWhiteSpace($ArchiveUrl)) {
+    $ArchiveUrl = "https://codeload.github.com/$Repository/zip/refs/heads/$Branch"
+}
+
+Write-Host "Downloading from: $ArchiveUrl"
+Invoke-WebRequest -Uri $ArchiveUrl -OutFile $zipPath
 Expand-Archive -LiteralPath $zipPath -DestinationPath $extractRoot -Force
 
 $scriptPath = Join-Path $repoRoot 'Get-SuccessfulLoginIPs.ps1'

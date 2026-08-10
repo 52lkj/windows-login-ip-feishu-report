@@ -12,6 +12,14 @@ irm https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/
 
 It will download the repository, ask for your Feishu webhook if needed, and install the daily task.
 
+If GitHub is slow in your region, download the installer from a mirror or use a different archive URL:
+
+```powershell
+irm https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.ps1 | iex
+# then run:
+# .\install.ps1 -ArchiveUrl "https://your-mirror.example.com/windows-login-ip-feishu-report.zip"
+```
+
 ## Usage
 
 ```powershell
