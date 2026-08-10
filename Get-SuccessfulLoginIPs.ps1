@@ -231,7 +231,7 @@ function Register-DailyTask {
     $trigger = New-ScheduledTaskTrigger -Daily -At $TaskTime
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
 
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description 'Send daily successful login IP summary to Feishu at 18:00' -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description 'Send daily successful login IP summary to Feishu at 18:00' -Force -ErrorAction Stop | Out-Null
     Write-Host "Scheduled task installed: $TaskName at $TaskTime"
 }
 
@@ -251,6 +251,9 @@ if ($InstallTask) {
         Register-DailyTask -ScriptPath $scriptPath -WebhookUrl $WebhookUrl -TaskName $TaskName -TaskTime $TaskTime
     }
     catch {
+        if ($_.Exception.Message -match '0x80070005|拒绝访问|Access is denied') {
+            Write-Error 'Failed to register scheduled task. Please run PowerShell as Administrator.'
+        }
         Write-Error "Failed to register scheduled task. $($_.Exception.Message)"
         exit 1
     }
@@ -315,4 +318,3 @@ else {
 if (-not $OutCsv -and -not $WebhookUrl) {
     $output
 }
-

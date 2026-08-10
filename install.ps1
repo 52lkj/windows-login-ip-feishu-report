@@ -39,3 +39,6 @@ if (-not (Test-Path -LiteralPath $scriptPath)) {
 }
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -InstallTask -WebhookUrl $WebhookUrl
+if ($LASTEXITCODE -ne 0) {
+    throw 'Installer failed. Please rerun PowerShell as Administrator.'
+}
