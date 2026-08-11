@@ -1,11 +1,8 @@
-[CmdletBinding()]
-param(
-    [string]$Repository = '52lkj/windows-login-ip-feishu-report',
-    [string]$Branch = 'main',
-    [string]$WebhookUrl,
-    [string]$ArchiveUrl,
-    [string]$InstallDir = (Join-Path $env:ProgramData 'windows-login-ip-feishu-report')
-)
+$Repository = if ($env:WLIFF_REPOSITORY) { $env:WLIFF_REPOSITORY } else { '52lkj/windows-login-ip-feishu-report' }
+$Branch = if ($env:WLIFF_BRANCH) { $env:WLIFF_BRANCH } else { 'main' }
+$WebhookUrl = $env:FEISHU_WEBHOOK_URL
+$ArchiveUrl = $env:WLIFF_ARCHIVE_URL
+$InstallDir = if ($env:WLIFF_INSTALL_DIR) { $env:WLIFF_INSTALL_DIR } else { Join-Path $env:ProgramData 'windows-login-ip-feishu-report' }
 
 if ([string]::IsNullOrWhiteSpace($WebhookUrl)) {
     $WebhookUrl = Read-Host 'Feishu webhook URL'
