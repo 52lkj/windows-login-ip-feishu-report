@@ -1,9 +1,10 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Repository = '52lkj/windows-login-ip-feishu-report',
     [string]$Branch = 'main',
     [string]$WebhookUrl,
-    [string]$ArchiveUrl
+    [string]$ArchiveUrl,
+    [string]$InstallDir = (Join-Path $env:ProgramData 'windows-login-ip-feishu-report')
 )
 
 if ([string]::IsNullOrWhiteSpace($WebhookUrl)) {
@@ -38,7 +39,13 @@ if (-not (Test-Path -LiteralPath $scriptPath)) {
     throw 'Downloaded package does not contain Get-SuccessfulLoginIPs.ps1.'
 }
 
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -InstallTask -WebhookUrl $WebhookUrl
+New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+$installedScriptPath = Join-Path $InstallDir 'Get-SuccessfulLoginIPs.ps1'
+Copy-Item -LiteralPath $scriptPath -Destination $installedScriptPath -Force
+
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installedScriptPath -InstallTask -WebhookUrl $WebhookUrl
 if ($LASTEXITCODE -ne 0) {
     throw 'Installer failed. Please rerun PowerShell as Administrator.'
 }
+
+Write-Host "Installed script: $installedScriptPath"

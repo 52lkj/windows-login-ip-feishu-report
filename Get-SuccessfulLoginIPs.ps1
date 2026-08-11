@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Extract successful Windows logon IP addresses from the Security event log and send daily summaries to Feishu.
 
@@ -212,7 +212,8 @@ function Send-FeishuText {
         }
     } | ConvertTo-Json -Depth 6
 
-    Invoke-RestMethod -Method Post -Uri $WebhookUrl -ContentType 'application/json; charset=utf-8' -Body $payload -ErrorAction Stop | Out-Null
+    $body = [System.Text.Encoding]::UTF8.GetBytes($payload)
+    Invoke-RestMethod -Method Post -Uri $WebhookUrl -ContentType 'application/json; charset=utf-8' -Body $body -ErrorAction Stop | Out-Null
 }
 
 function Register-DailyTask {
