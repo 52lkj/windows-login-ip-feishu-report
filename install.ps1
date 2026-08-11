@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Repository = '52lkj/windows-login-ip-feishu-report',
     [string]$Branch = 'main',
