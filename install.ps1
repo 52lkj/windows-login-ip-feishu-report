@@ -46,3 +46,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Installed script: $installedScriptPath"
+
+Write-Host 'Sending Feishu test message...'
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installedScriptPath -Today -WebhookUrl $WebhookUrl
+if ($LASTEXITCODE -ne 0) {
+    throw 'Feishu test message failed. Please check the webhook URL and network access.'
+}
+
+Write-Host 'Feishu test message sent.'
