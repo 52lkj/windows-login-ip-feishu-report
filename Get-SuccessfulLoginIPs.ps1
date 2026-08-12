@@ -169,7 +169,6 @@ function Build-SummaryText {
 
     $summary = $Records |
         Group-Object IpAddress |
-        Sort-Object Count -Descending |
         ForEach-Object {
             [pscustomobject]@{
                 IpAddress = $_.Name
@@ -177,7 +176,8 @@ function Build-SummaryText {
                 FirstSeen = ($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated
                 LastSeen  = ($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated
             }
-        }
+        } |
+        Sort-Object LastSeen -Descending
 
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add("服务器IP: " + ($(if ($PublicIp) { $PublicIp } else { 'unavailable' })))
@@ -292,7 +292,6 @@ if ($OutCsv) {
 if ($Unique) {
     $output = $records |
         Group-Object IpAddress |
-        Sort-Object Count -Descending |
         Select-Object @{
             Name = 'IpAddress'
             Expression = { $_.Name }
@@ -302,7 +301,8 @@ if ($Unique) {
         }, @{
             Name = 'LastSeen'
             Expression = { ($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated }
-        }
+        } |
+        Sort-Object LastSeen -Descending
 }
 elseif ($Detailed) {
     $output = $records | Sort-Object TimeCreated -Descending
