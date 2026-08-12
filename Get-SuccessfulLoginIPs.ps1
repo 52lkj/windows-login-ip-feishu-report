@@ -180,7 +180,7 @@ function Build-SummaryText {
         }
 
     $lines = New-Object System.Collections.Generic.List[string]
-    $lines.Add("出口公网IP: " + ($(if ($PublicIp) { $PublicIp } else { 'unavailable' })))
+    $lines.Add("服务器IP: " + ($(if ($PublicIp) { $PublicIp } else { 'unavailable' })))
     $lines.Add("今日成功登录IP:")
 
     if (-not $summary -or $summary.Count -eq 0) {
