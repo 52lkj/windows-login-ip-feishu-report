@@ -87,7 +87,9 @@ collect_from_last() {
         return 0
     fi
 
-    LC_ALL=C last -iF -w -s today 2>/dev/null | awk '
+    local mode="${1:-all}"
+
+    LC_ALL=C last -iF -w -s today 2>/dev/null | awk -v mode="$mode" '
         /^wtmp begins/ { next }
         /^reboot/ { next }
         /^shutdown/ { next }
@@ -96,12 +98,21 @@ collect_from_last() {
             user=$1
             tty=$2
             host=$3
+            timeText=""
 
             if (host == "" || host == ":0" || host == "0.0.0.0" || host == "-" || host ~ /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/) {
                 host="local"
             }
 
-            print "last/wtmp\t" user "\t" host "\t" $0
+            if (mode == "local-only" && host != "local") {
+                next
+            }
+
+            if (match($0, /(Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z][a-z] +[0-9]+ [0-9:]+ [0-9]{4}/)) {
+                timeText=substr($0, RSTART, RLENGTH)
+            }
+
+            print "last/wtmp\t" user "\t" host "\t" tty "\tlogin\t" timeText
         }
     ' || true
 }
@@ -112,7 +123,7 @@ collect_from_journal() {
     fi
 
     journalctl --since today -o short-iso 2>/dev/null \
-        | grep -Ei 'sshd.*Accepted|login.*session opened|systemd-logind.*New session' \
+        | grep -Ei 'sshd.*Accepted' \
         | sed -E 's/[[:space:]]+/ /g' \
         | awk '
             /sshd.*Accepted/ {
@@ -124,12 +135,8 @@ collect_from_journal() {
                     if ($i == "from") ip=$(i+1)
                 }
 
-                print "journalctl\t" user "\t" ip "\t" $0
+                print "journalctl\t" user "\t" ip "\tssh\tssh\t" $1
                 next
-            }
-
-            {
-                print "journalctl\tlocal\tlocal\t" $0
             }
         ' || true
 }
@@ -147,7 +154,7 @@ collect_from_auth_logs() {
     fi
 
     grep -h "$todayPattern" "${files[@]}" 2>/dev/null \
-        | grep -Ei 'sshd.*Accepted|login.*session opened' \
+        | grep -Ei 'sshd.*Accepted' \
         | sed -E 's/[[:space:]]+/ /g' \
         | awk '
             /sshd.*Accepted/ {
@@ -159,22 +166,31 @@ collect_from_auth_logs() {
                     if ($i == "from") ip=$(i+1)
                 }
 
-                print "authlog\t" user "\t" ip "\t" $0
+                timeText=$1 " " $2 " " $3
+                print "authlog\t" user "\t" ip "\tssh\tssh\t" timeText
                 next
-            }
-
-            {
-                print "authlog\tlocal\tlocal\t" $0
             }
         ' || true
 }
 
 collect_today() {
-    {
-        collect_from_last
-        collect_from_journal
-        collect_from_auth_logs
-    } | awk '!seen[$0]++'
+    local primaryRecords
+    primaryRecords="$(collect_from_journal | awk '!seen[$0]++')"
+
+    if [[ -z "${primaryRecords// }" ]]; then
+        primaryRecords="$(collect_from_auth_logs | awk '!seen[$0]++')"
+    fi
+
+    local lastMode="all"
+    if printf '%s\n' "$primaryRecords" | awk -F '\t' '$3 != "" && $3 != "local" && $3 != "unknown" { found=1 } END { exit found ? 0 : 1 }'; then
+        lastMode="local-only"
+    fi
+
+    if [[ -n "${primaryRecords// }" ]]; then
+        printf '%s\n' "$primaryRecords"
+    fi
+
+    collect_from_last "$lastMode" | awk '!seen[$0]++'
 }
 
 build_report() {
@@ -183,32 +199,67 @@ build_report() {
     local publicIp="$3"
     local records="$4"
 
-    local summary
-    summary="$(printf '%s\n' "$records" \
-        | awk -F '\t' '$3 != "" { count[$3]++; last[$3]=$4 } END { for (ip in count) print ip "\t" count[ip] "\t" last[ip] }' \
+    local remoteSummary
+    remoteSummary="$(printf '%s\n' "$records" \
+        | awk -F '\t' '$3 != "" && $3 != "local" && $3 != "unknown" { count[$3]++ } END { for (ip in count) print ip "\t" count[ip] }' \
         | sort -k2,2nr -k1,1)"
 
-    {
-        echo "Linux login IP report"
-        echo "Host: $host"
-        echo "Server public IP: ${publicIp:-unavailable}"
-        echo "Time: $now"
-        echo
-        echo "Today's successful login IPs:"
+    local localCount
+    localCount="$(printf '%s\n' "$records" | awk -F '\t' '$3 == "local" { count++ } END { print count + 0 }')"
 
-        if [[ -z "${summary// }" ]]; then
-            echo "  none"
+    local remoteCount
+    remoteCount="$(printf '%s\n' "$records" | awk -F '\t' '$3 != "" && $3 != "local" && $3 != "unknown" { count++ } END { print count + 0 }')"
+
+    {
+        echo "Linux 登录报告"
+        echo "服务器: $host"
+        echo "公网 IP: ${publicIp:-unavailable}"
+        echo "生成时间: $now"
+        echo
+        echo "概览:"
+        echo "  远程登录: $remoteCount 次"
+        echo "  本地会话: $localCount 次"
+        echo
+        echo "远程 IP:"
+
+        if [[ -z "${remoteSummary// }" ]]; then
+            echo "  无"
         else
-            printf '%s\n' "$summary" | awk -F '\t' '{ printf "  %s (%s times)\n", $1, $2 }'
+            printf '%s\n' "$remoteSummary" | awk -F '\t' '{ printf "  %s  %s 次\n", $1, $2 }'
         fi
 
         echo
-        echo "Records:"
+        echo "最近明细:"
 
         if [[ -z "${records// }" ]]; then
-            echo "  No successful login records found today."
+            echo "  今日没有成功登录记录。"
         else
-            printf '%s\n' "$records"
+            printf '%s\n' "$records" \
+                | awk -F '\t' '
+                    NR <= 20 {
+                        source=$1
+                        user=$2
+                        ip=$3
+                        channel=$4
+                        method=$5
+                        timeText=$6
+
+                        if (timeText == "") {
+                            timeText="unknown time"
+                        }
+
+                        if (ip == "local") {
+                            printf "  %s  本地  user=%s  type=%s  source=%s\n", timeText, user, channel, source
+                        } else {
+                            printf "  %s  %s  user=%s  method=%s  source=%s\n", timeText, ip, user, method, source
+                        }
+                    }
+                    END {
+                        if (NR > 20) {
+                            printf "  ... 还有 %d 条\n", NR - 20
+                        }
+                    }
+                '
         fi
     }
 }
