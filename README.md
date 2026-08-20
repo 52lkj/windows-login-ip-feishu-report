@@ -38,7 +38,7 @@ Run this on the target Linux server:
 
 ```bash
 export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
-curl -fsSL https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install-linux.sh | sudo bash
 ```
 
 If GitHub is slow in your region, download the installer from a mirror or use a different archive URL:
