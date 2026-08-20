@@ -26,14 +26,10 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     exit 1
 fi
 
-if ! command -v unzip >/dev/null 2>&1; then
-    echo "unzip is required." >&2
-    exit 1
-fi
-
 TempRoot="$(mktemp -d)"
 ZipPath="$TempRoot/repo.zip"
 ExtractRoot="$TempRoot/extract"
+ScriptPath="$TempRoot/linux-login-ip-feishu-report.sh"
 
 cleanup() {
     rm -rf "$TempRoot"
@@ -43,27 +39,42 @@ trap cleanup EXIT
 mkdir -p "$ExtractRoot"
 
 if [[ -z "${ArchiveUrl// }" ]]; then
-    ArchiveUrl="https://codeload.github.com/${Repository}/zip/refs/heads/${Branch}"
-fi
+    ScriptUrl="https://raw.githubusercontent.com/${Repository}/${Branch}/linux-login-ip-feishu-report.sh"
+    echo "Downloading from: $ScriptUrl"
 
-echo "Downloading from: $ArchiveUrl"
-
-if command -v curl >/dev/null 2>&1; then
-    curl -fL "$ArchiveUrl" -o "$ZipPath"
-elif command -v wget >/dev/null 2>&1; then
-    wget -O "$ZipPath" "$ArchiveUrl"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fL "$ScriptUrl" -o "$ScriptPath"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$ScriptPath" "$ScriptUrl"
+    else
+        echo "curl or wget is required." >&2
+        exit 1
+    fi
 else
-    echo "curl or wget is required." >&2
-    exit 1
-fi
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo "unzip is required when WLIFF_ARCHIVE_URL is used." >&2
+        exit 1
+    fi
 
-unzip -q "$ZipPath" -d "$ExtractRoot"
+    echo "Downloading from: $ArchiveUrl"
 
-ScriptPath="$(find "$ExtractRoot" -maxdepth 3 -type f -name 'linux-login-ip-feishu-report.sh' | head -n 1)"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fL "$ArchiveUrl" -o "$ZipPath"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$ZipPath" "$ArchiveUrl"
+    else
+        echo "curl or wget is required." >&2
+        exit 1
+    fi
 
-if [[ -z "$ScriptPath" ]]; then
-    echo "Downloaded package does not contain linux-login-ip-feishu-report.sh." >&2
-    exit 1
+    unzip -q "$ZipPath" -d "$ExtractRoot"
+
+    ScriptPath="$(find "$ExtractRoot" -maxdepth 3 -type f -name 'linux-login-ip-feishu-report.sh' | head -n 1)"
+
+    if [[ -z "$ScriptPath" ]]; then
+        echo "Downloaded package does not contain linux-login-ip-feishu-report.sh." >&2
+        exit 1
+    fi
 fi
 
 mkdir -p "$InstallDir"

@@ -38,7 +38,7 @@ Run this on the target Linux server:
 
 ```bash
 export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
-curl -fsSL https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.sh | sudo -E bash
+curl -fsSL https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.sh | sudo bash
 ```
 
 If GitHub is slow in your region, download the installer from a mirror or use a different archive URL:
@@ -46,7 +46,7 @@ If GitHub is slow in your region, download the installer from a mirror or use a 
 ```bash
 export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
 export WLIFF_ARCHIVE_URL="https://your-mirror.example.com/windows-login-ip-feishu-report.zip"
-curl -fsSL https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.sh | sudo -E bash
+curl -fsSL https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.sh | sudo bash
 ```
 
 The Linux installer creates a systemd timer that sends the report daily at 18:00.
