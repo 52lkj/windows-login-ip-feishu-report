@@ -24,6 +24,7 @@ $servers = $pdo->query("
         MAX(e.occurred_at) AS last_login_at
     FROM servers s
     LEFT JOIN login_events e ON e.server_id = s.id
+    WHERE s.deleted_at IS NULL
     GROUP BY s.id
     ORDER BY last_login_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
@@ -59,7 +60,11 @@ $adminToken = $_GET['token'];
     <h1>登录监控后台</h1>
 </header>
 <main>
-    <p><a href="health.php?token=<?= h($adminToken) ?>">后台健康检查</a></p>
+    <p>
+        <a href="servers.php?token=<?= h($adminToken) ?>">服务器管理</a>
+        ·
+        <a href="health.php?token=<?= h($adminToken) ?>">后台健康检查</a>
+    </p>
     <h2>服务器</h2>
     <table>
         <thead>

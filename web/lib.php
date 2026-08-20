@@ -49,10 +49,13 @@ function migrate(PDO $pdo): void
             allowed_ips TEXT NOT NULL DEFAULT '[]',
             owner TEXT,
             notes TEXT,
+            deleted_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
     ");
+
+    ensure_column($pdo, 'servers', 'deleted_at', 'TEXT');
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS login_events (
@@ -99,6 +102,18 @@ function migrate(PDO $pdo): void
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_login_events_ip ON login_events(login_ip)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_login_events_server ON login_events(server_key)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_login_events_anomaly ON login_events(is_anomalous)');
+}
+
+function ensure_column(PDO $pdo, string $table, string $column, string $definition): void
+{
+    $stmt = $pdo->query("PRAGMA table_info($table)");
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $info) {
+        if (($info['name'] ?? '') === $column) {
+            return;
+        }
+    }
+
+    $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
 }
 
 function json_response(array $data, int $status = 200): void
@@ -187,7 +202,7 @@ function upsert_server(PDO $pdo, string $serverKey, string $hostname, ?string $p
     $id = $stmt->fetchColumn();
 
     if ($id) {
-        $stmt = $pdo->prepare('UPDATE servers SET hostname = ?, public_ip = ?, updated_at = ? WHERE id = ?');
+        $stmt = $pdo->prepare('UPDATE servers SET hostname = ?, public_ip = ?, deleted_at = NULL, updated_at = ? WHERE id = ?');
         $stmt->execute([$hostname, $publicIp, $now, $id]);
         return (int)$id;
     }

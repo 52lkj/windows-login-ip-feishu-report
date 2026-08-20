@@ -90,6 +90,12 @@ Open the dashboard:
 https://your-site.example.com/web/index.php?token=replace-with-an-admin-token
 ```
 
+Manage server records:
+
+```text
+https://your-site.example.com/web/servers.php?token=replace-with-an-admin-token
+```
+
 Check backend health:
 
 ```text
