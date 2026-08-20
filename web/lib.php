@@ -277,6 +277,10 @@ function vt_fetch_ip(string $ip): ?array
         return null;
     }
 
+    if (!in_array('https', stream_get_wrappers(), true)) {
+        return null;
+    }
+
     $url = 'https://www.virustotal.com/api/v3/ip_addresses/' . rawurlencode($ip);
     $context = stream_context_create([
         'http' => [
@@ -287,7 +291,7 @@ function vt_fetch_ip(string $ip): ?array
         ],
     ]);
 
-    $body = file_get_contents($url, false, $context);
+    $body = @file_get_contents($url, false, $context);
     if ($body === false) {
         return null;
     }

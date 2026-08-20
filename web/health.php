@@ -22,6 +22,12 @@ $checks[] = [
     'detail' => extension_loaded('pdo_sqlite') ? 'available' : 'missing',
 ];
 
+$checks[] = [
+    'name' => 'HTTPS stream wrapper',
+    'ok' => in_array('https', stream_get_wrappers(), true),
+    'detail' => in_array('https', stream_get_wrappers(), true) ? 'available' : 'missing; enable openssl',
+];
+
 $dbPath = $config['db_path'] ?? '';
 $dbDir = $dbPath ? dirname($dbPath) : '';
 $checks[] = [
