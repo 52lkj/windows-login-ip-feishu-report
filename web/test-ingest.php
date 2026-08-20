@@ -31,6 +31,7 @@ $event = $payload['events'][0];
 $event['server_key'] = $payload['server_key'];
 $event['hostname'] = $payload['hostname'];
 $event['is_remote'] = true;
+$event['self_test_nonce'] = bin2hex(random_bytes(6));
 $reasons = assess_anomaly($pdo, $serverId, $event);
 
 if (!$reasons) {
@@ -44,7 +45,7 @@ $stmt = $pdo->prepare('
         channel, method, source, occurred_at, received_at, is_remote, is_success,
         is_anomalous, anomaly_reasons, raw_json
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
 ');
 
 $stmt->execute([
@@ -60,6 +61,7 @@ $stmt->execute([
     $event['source'],
     $event['occurred_at'],
     now_iso(),
+    1,
     json_encode($reasons, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
     json_encode($event, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
 ]);
