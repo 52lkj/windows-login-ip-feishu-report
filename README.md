@@ -58,6 +58,60 @@ The Linux installer creates a systemd timer that sends the report daily at 18:00
 sudo FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx" ./linux-login-ip-feishu-report.sh --install
 ```
 
+## Web Backend
+
+The optional PHP backend receives structured login events, matches them with the server table, flags unusual successful logins, and caches VirusTotal IP reputation.
+
+### Backend Deploy
+
+Upload the `web/` directory to a PHP server with SQLite enabled, then create `web/config.php`:
+
+```php
+<?php
+return [
+    'db_path' => __DIR__ . '/data/login-monitor.sqlite',
+    'ingest_token' => 'replace-with-a-long-random-token',
+    'admin_token' => 'replace-with-an-admin-token',
+    'virustotal_api_key' => 'your-virustotal-api-key',
+    'timezone' => 'Asia/Shanghai',
+];
+```
+
+Open the dashboard:
+
+```text
+https://your-site.example.com/web/index.php?token=replace-with-an-admin-token
+```
+
+### Linux Agent To Backend
+
+Install the Linux agent with backend reporting enabled:
+
+```bash
+export WLIFF_BACKEND_URL="https://your-site.example.com/web/ingest.php"
+export WLIFF_INGEST_TOKEN="replace-with-a-long-random-token"
+curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo bash
+```
+
+You can keep Feishu enabled at the same time:
+
+```bash
+export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
+export WLIFF_BACKEND_URL="https://your-site.example.com/web/ingest.php"
+export WLIFF_INGEST_TOKEN="replace-with-a-long-random-token"
+curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo bash
+```
+
+### VirusTotal Enrichment
+
+The backend can refresh suspicious IPs from VirusTotal. Run it from cron:
+
+```cron
+*/30 * * * * php /path/to/web/enrich.php >/dev/null 2>&1
+```
+
+You can also refresh one IP from the IP detail page.
+
 ## Notes
 
 - Run PowerShell as Administrator if Security log access is denied.

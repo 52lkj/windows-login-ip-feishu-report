@@ -4,20 +4,27 @@ set -euo pipefail
 Repository="${WLIFF_REPOSITORY:-52lkj/windows-login-ip-feishu-report}"
 Branch="${WLIFF_BRANCH:-main}"
 WebhookUrl="${FEISHU_WEBHOOK_URL:-}"
+BackendUrl="${WLIFF_BACKEND_URL:-}"
+IngestToken="${WLIFF_INGEST_TOKEN:-}"
 InstallDir="${WLIFF_INSTALL_DIR:-/opt/windows-login-ip-feishu-report}"
 RawBase="${WLIFF_RAW_BASE:-https://cdn.jsdelivr.net/gh/${Repository}@${Branch}}"
 
-if [[ -z "${WebhookUrl// }" ]]; then
+if [[ -z "${WebhookUrl// }" && -z "${BackendUrl// }" ]]; then
     if [[ -r /dev/tty ]]; then
         read -r -p "Feishu webhook URL: " WebhookUrl </dev/tty
     else
-        echo "FEISHU_WEBHOOK_URL is required." >&2
+        echo "FEISHU_WEBHOOK_URL or WLIFF_BACKEND_URL is required." >&2
         exit 1
     fi
 fi
 
-if [[ -z "${WebhookUrl// }" ]]; then
-    echo "Feishu webhook URL is required." >&2
+if [[ -z "${WebhookUrl// }" && -z "${BackendUrl// }" ]]; then
+    echo "Feishu webhook URL or backend URL is required." >&2
+    exit 1
+fi
+
+if [[ -n "${BackendUrl// }" && -z "${IngestToken// }" ]]; then
+    echo "WLIFF_INGEST_TOKEN is required when WLIFF_BACKEND_URL is set." >&2
     exit 1
 fi
 
@@ -51,6 +58,6 @@ InstalledScriptPath="$InstallDir/linux-login-ip-feishu-report.sh"
 cp "$ScriptPath" "$InstalledScriptPath"
 chmod 755 "$InstalledScriptPath"
 
-FEISHU_WEBHOOK_URL="$WebhookUrl" WLIFF_INSTALL_DIR="$InstallDir" "$InstalledScriptPath" --install
+FEISHU_WEBHOOK_URL="$WebhookUrl" WLIFF_BACKEND_URL="$BackendUrl" WLIFF_INGEST_TOKEN="$IngestToken" WLIFF_INSTALL_DIR="$InstallDir" "$InstalledScriptPath" --install
 
 echo "Installed script: $InstalledScriptPath"

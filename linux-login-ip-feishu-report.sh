@@ -2,6 +2,8 @@
 set -euo pipefail
 
 WebhookUrl="${FEISHU_WEBHOOK_URL:-}"
+BackendUrl="${WLIFF_BACKEND_URL:-}"
+IngestToken="${WLIFF_INGEST_TOKEN:-}"
 InstallDir="${WLIFF_INSTALL_DIR:-/opt/windows-login-ip-feishu-report}"
 EnvFile="${WLIFF_ENV_FILE:-/etc/windows-login-ip-feishu-report.env}"
 ServiceName="${WLIFF_SERVICE_NAME:-windows-login-ip-feishu-report}"
@@ -21,23 +23,16 @@ Options:
 
 Environment:
   FEISHU_WEBHOOK_URL   Feishu bot webhook URL.
+  WLIFF_BACKEND_URL     Optional backend ingest URL, for example https://example.com/web/ingest.php.
+  WLIFF_INGEST_TOKEN    Bearer token for backend ingest.
   WLIFF_INSTALL_DIR    Install directory. Default: /opt/windows-login-ip-feishu-report
   WLIFF_TASK_TIME      Daily timer time in HH:mm. Default: 18:00
 EOF
 }
 
-require_webhook() {
-    if [[ -z "${WebhookUrl// }" ]]; then
-        if [[ -r /dev/tty ]]; then
-            read -r -p "Feishu webhook URL: " WebhookUrl </dev/tty
-        else
-            echo "FEISHU_WEBHOOK_URL is required." >&2
-            exit 1
-        fi
-    fi
-
-    if [[ -z "${WebhookUrl// }" ]]; then
-        echo "Feishu webhook URL is required." >&2
+require_delivery_target() {
+    if [[ -z "${WebhookUrl// }" && -z "${BackendUrl// }" ]]; then
+        echo "FEISHU_WEBHOOK_URL or WLIFF_BACKEND_URL is required." >&2
         exit 1
     fi
 }
@@ -60,6 +55,36 @@ send_feishu_text() {
         curl -fsS -H "Content-Type: application/json; charset=utf-8" -d "$payload" "$WebhookUrl" >/dev/null
     elif command -v wget >/dev/null 2>&1; then
         wget -qO- --header="Content-Type: application/json; charset=utf-8" --post-data="$payload" "$WebhookUrl" >/dev/null
+    else
+        echo "curl or wget is required." >&2
+        exit 1
+    fi
+}
+
+send_backend_payload() {
+    local payload="$1"
+
+    if [[ -z "${BackendUrl// }" ]]; then
+        return 0
+    fi
+
+    if [[ -z "${IngestToken// }" ]]; then
+        echo "WLIFF_INGEST_TOKEN is required when WLIFF_BACKEND_URL is set." >&2
+        exit 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsS \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -H "Authorization: Bearer $IngestToken" \
+            -d "$payload" \
+            "$BackendUrl" >/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- \
+            --header="Content-Type: application/json; charset=utf-8" \
+            --header="Authorization: Bearer $IngestToken" \
+            --post-data="$payload" \
+            "$BackendUrl" >/dev/null
     else
         echo "curl or wget is required." >&2
         exit 1
@@ -264,8 +289,52 @@ build_report() {
     }
 }
 
+build_backend_payload() {
+    local host="$1"
+    local publicIp="$2"
+    local records="$3"
+
+    if command -v python3 >/dev/null 2>&1; then
+        HOST="$host" PUBLIC_IP="$publicIp" RECORDS="$records" python3 - <<'PY'
+import json
+import os
+import socket
+
+host = os.environ.get("HOST") or socket.gethostname()
+public_ip = os.environ.get("PUBLIC_IP") or None
+records = os.environ.get("RECORDS") or ""
+events = []
+
+for line in records.splitlines():
+    parts = line.split("\t")
+    if len(parts) < 6:
+        continue
+    source, username, login_ip, channel, method, occurred_at = parts[:6]
+    events.append({
+        "source": source,
+        "username": username,
+        "login_ip": login_ip,
+        "channel": channel,
+        "method": method,
+        "occurred_at": occurred_at,
+        "is_success": True,
+    })
+
+print(json.dumps({
+    "server_key": host,
+    "hostname": host,
+    "server_public_ip": public_ip,
+    "events": events,
+}, ensure_ascii=False, separators=(",", ":")))
+PY
+    else
+        echo "python3 is required for backend JSON payload generation." >&2
+        exit 1
+    fi
+}
+
 run_today() {
-    require_webhook
+    require_delivery_target
 
     local host
     host="$(hostname -f 2>/dev/null || hostname)"
@@ -278,8 +347,17 @@ run_today() {
     local report
     report="$(build_report "$host" "$now" "$publicIp" "$records")"
 
-    send_feishu_text "$report"
-    echo "Feishu login report sent."
+    if [[ -n "${WebhookUrl// }" ]]; then
+        send_feishu_text "$report"
+        echo "Feishu login report sent."
+    fi
+
+    if [[ -n "${BackendUrl// }" ]]; then
+        local payload
+        payload="$(build_backend_payload "$host" "$publicIp" "$records")"
+        send_backend_payload "$payload"
+        echo "Backend login report sent."
+    fi
 }
 
 quote_systemd_env_value() {
@@ -297,7 +375,7 @@ install_timer() {
         exit 1
     fi
 
-    require_webhook
+    require_delivery_target
 
     mkdir -p "$InstallDir"
 
@@ -314,6 +392,8 @@ install_timer() {
 
     {
         printf 'FEISHU_WEBHOOK_URL=%s\n' "$(quote_systemd_env_value "$WebhookUrl")"
+        printf 'WLIFF_BACKEND_URL=%s\n' "$(quote_systemd_env_value "$BackendUrl")"
+        printf 'WLIFF_INGEST_TOKEN=%s\n' "$(quote_systemd_env_value "$IngestToken")"
         printf 'WLIFF_INSTALL_DIR=%s\n' "$(quote_systemd_env_value "$InstallDir")"
     } > "$EnvFile"
     chmod 600 "$EnvFile"
