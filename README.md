@@ -96,6 +96,12 @@ Check backend health:
 https://your-site.example.com/web/health.php?token=replace-with-an-admin-token
 ```
 
+Run a local backend self-test on the server:
+
+```bash
+php /path/to/web/test-ingest.php
+```
+
 ### Linux Agent To Backend
 
 Install the Linux agent with backend reporting enabled:
