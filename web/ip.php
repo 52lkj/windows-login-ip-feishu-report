@@ -16,8 +16,14 @@ if ($ip === '') {
 
 $pdo = db();
 if (isset($_POST['refresh_vt'])) {
-    vt_enrich_ip($pdo, $ip);
-    header('Location: ip.php?token=' . urlencode((string)$_GET['token']) . '&ip=' . urlencode($ip));
+    $result = vt_enrich_ip_with_status($pdo, $ip);
+    $params = [
+        'token' => (string)$_GET['token'],
+        'ip' => $ip,
+        'vt_status' => $result['ok'] ? 'ok' : 'failed',
+        'vt_message' => (string)($result['message'] ?? ''),
+    ];
+    header('Location: ip.php?' . http_build_query($params));
     exit;
 }
 
@@ -52,6 +58,8 @@ $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .bad { background: #ffe8e8; color: #9b1c1c; }
         .mid { background: #fff4d6; color: #7a4b00; }
         .low { background: #e8f7ee; color: #146c3e; }
+        .notice { border: 1px solid #b7d7bd; background: #edf8ef; color: #14532d; padding: 10px 12px; margin-bottom: 14px; }
+        .notice.failed { border-color: #f2b8b5; background: #fff0ef; color: #8a1c14; }
         .muted { color: #687386; }
         button { padding: 8px 12px; border: 1px solid #155eef; color: #fff; background: #155eef; border-radius: 6px; cursor: pointer; }
         a { color: #155eef; text-decoration: none; }
@@ -65,6 +73,12 @@ $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <p><a href="index.php?token=<?= h((string)$_GET['token']) ?>">返回后台</a></p>
     <div class="panel">
         <h2>VirusTotal</h2>
+        <?php if (isset($_GET['vt_status'])): ?>
+            <?php $noticeClass = (string)$_GET['vt_status'] === 'ok' ? '' : ' failed'; ?>
+            <div class="notice<?= h($noticeClass) ?>">
+                <?= h((string)($_GET['vt_message'] ?? 'VirusTotal 刷新完成。')) ?>
+            </div>
+        <?php endif; ?>
         <?php if ($enrichment): ?>
             <?php $risk = $enrichment['risk_level']; $riskClass = $risk === 'high' ? 'bad' : ($risk === 'medium' ? 'mid' : 'low'); ?>
             <p>风险等级: <span class="tag <?= h($riskClass) ?>"><?= h($risk) ?></span></p>

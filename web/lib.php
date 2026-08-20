@@ -269,16 +269,22 @@ function risk_level_from_vt(array $stats, int $reputation): string
     return 'low';
 }
 
-function vt_fetch_ip(string $ip): ?array
+function vt_fetch_ip_with_status(string $ip): array
 {
     $config = app_config();
-    $apiKey = $config['virustotal_api_key'] ?? '';
+    $apiKey = trim((string)($config['virustotal_api_key'] ?? ''));
     if ($apiKey === '') {
-        return null;
+        return [
+            'ok' => false,
+            'message' => '没有配置 VirusTotal API key，请在 web/config.php 设置 virustotal_api_key。',
+        ];
     }
 
     if (!in_array('https', stream_get_wrappers(), true)) {
-        return null;
+        return [
+            'ok' => false,
+            'message' => '当前 PHP 没有启用 HTTPS stream wrapper，请启用 openssl 扩展后重启 PHP 服务。',
+        ];
     }
 
     $url = 'https://www.virustotal.com/api/v3/ip_addresses/' . rawurlencode($ip);
@@ -292,31 +298,91 @@ function vt_fetch_ip(string $ip): ?array
     ]);
 
     $body = @file_get_contents($url, false, $context);
+    $statusLine = $http_response_header[0] ?? '';
     if ($body === false) {
-        return null;
+        $error = error_get_last();
+        $errorMessage = vt_human_error_message((string)($error['message'] ?? ''));
+        return [
+            'ok' => false,
+            'message' => '请求 VirusTotal 失败：' . $errorMessage,
+            'status_line' => $statusLine,
+        ];
     }
 
-    $statusLine = $http_response_header[0] ?? '';
     if (!preg_match('/\s2\d\d\s/', $statusLine)) {
-        return null;
+        $data = json_decode($body, true);
+        $vtMessage = $data['error']['message'] ?? $data['error']['code'] ?? trim($body);
+        if ($vtMessage === '') {
+            $vtMessage = 'VirusTotal 返回了非成功状态。';
+        }
+
+        return [
+            'ok' => false,
+            'message' => trim($statusLine . ' ' . $vtMessage),
+            'status_line' => $statusLine,
+        ];
     }
 
     $data = json_decode($body, true);
-    return is_array($data) ? $data : null;
+    if (!is_array($data)) {
+        return [
+            'ok' => false,
+            'message' => 'VirusTotal 返回的数据不是有效 JSON。',
+            'status_line' => $statusLine,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'message' => 'VirusTotal 查询成功。',
+        'status_line' => $statusLine,
+        'data' => $data,
+    ];
 }
 
-function vt_enrich_ip(PDO $pdo, string $ip): bool
+function vt_human_error_message(string $message): string
+{
+    if ($message === '') {
+        return '网络连接失败或请求超时。';
+    }
+
+    if (stripos($message, 'access permissions') !== false || strpos($message, '访问权限不允许') !== false) {
+        return '当前 PHP 进程无法连接外网，常见原因是 Windows 防火墙、安全软件或运行环境限制了出站 HTTPS 连接。';
+    }
+
+    if (stripos($message, 'timed out') !== false || strpos($message, '超时') !== false) {
+        return '连接 VirusTotal 超时，请检查本机网络是否能访问 www.virustotal.com。';
+    }
+
+    if (stripos($message, 'getaddrinfo') !== false || stripos($message, 'php_network_getaddresses') !== false) {
+        return 'DNS 解析失败，请检查本机 DNS 或网络连接。';
+    }
+
+    return $message;
+}
+
+function vt_fetch_ip(string $ip): ?array
+{
+    $result = vt_fetch_ip_with_status($ip);
+    return $result['ok'] ? $result['data'] : null;
+}
+
+function vt_enrich_ip_with_status(PDO $pdo, string $ip): array
 {
     $ip = normalize_ip($ip);
     if ($ip === '' || $ip === 'local' || $ip === 'unknown') {
-        return false;
+        return [
+            'ok' => false,
+            'message' => '这个 IP 不能查询 VirusTotal。',
+        ];
     }
 
-    $data = vt_fetch_ip($ip);
-    if (!$data) {
-        return false;
+    $fetch = vt_fetch_ip_with_status($ip);
+    if (!$fetch['ok']) {
+        return $fetch;
     }
 
+    $data = $fetch['data'];
     $attrs = $data['data']['attributes'] ?? [];
     $stats = $attrs['last_analysis_stats'] ?? [];
     $reputation = (int)($attrs['reputation'] ?? 0);
@@ -358,5 +424,21 @@ function vt_enrich_ip(PDO $pdo, string $ip): bool
         $now,
     ]);
 
-    return true;
+    return [
+        'ok' => true,
+        'message' => sprintf(
+            'VirusTotal 刷新成功：风险等级 %s，恶意 %d，可疑 %d。',
+            $riskLevel,
+            (int)($stats['malicious'] ?? 0),
+            (int)($stats['suspicious'] ?? 0)
+        ),
+        'checked_at' => $now,
+        'risk_level' => $riskLevel,
+    ];
+}
+
+function vt_enrich_ip(PDO $pdo, string $ip): bool
+{
+    $result = vt_enrich_ip_with_status($pdo, $ip);
+    return (bool)$result['ok'];
 }
