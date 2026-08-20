@@ -5,6 +5,7 @@ Repository="${WLIFF_REPOSITORY:-52lkj/windows-login-ip-feishu-report}"
 Branch="${WLIFF_BRANCH:-main}"
 WebhookUrl="${FEISHU_WEBHOOK_URL:-}"
 InstallDir="${WLIFF_INSTALL_DIR:-/opt/windows-login-ip-feishu-report}"
+RawBase="${WLIFF_RAW_BASE:-https://cdn.jsdelivr.net/gh/${Repository}@${Branch}}"
 
 if [[ -z "${WebhookUrl// }" ]]; then
     if [[ -r /dev/tty ]]; then
@@ -33,7 +34,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-ScriptUrl="https://raw.githubusercontent.com/${Repository}/${Branch}/linux-login-ip-feishu-report.sh"
+ScriptUrl="${RawBase%/}/linux-login-ip-feishu-report.sh"
 echo "Downloading from: $ScriptUrl"
 
 if command -v curl >/dev/null 2>&1; then
