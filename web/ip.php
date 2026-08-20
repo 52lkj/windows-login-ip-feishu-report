@@ -77,6 +77,9 @@ $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php $noticeClass = (string)$_GET['vt_status'] === 'ok' ? '' : ' failed'; ?>
             <div class="notice<?= h($noticeClass) ?>">
                 <?= h((string)($_GET['vt_message'] ?? 'VirusTotal 刷新完成。')) ?>
+                <?php if ((string)$_GET['vt_status'] !== 'ok'): ?>
+                    <br><a href="health.php?token=<?= h((string)$_GET['token']) ?>&check_vt=1">查看健康检查</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
         <?php if ($enrichment): ?>

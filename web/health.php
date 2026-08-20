@@ -28,6 +28,24 @@ $checks[] = [
     'detail' => in_array('https', stream_get_wrappers(), true) ? 'available' : 'missing; enable openssl',
 ];
 
+$checks[] = [
+    'name' => 'OpenSSL extension',
+    'ok' => extension_loaded('openssl'),
+    'detail' => extension_loaded('openssl') ? (OPENSSL_VERSION_TEXT ?: 'loaded') : 'missing',
+];
+
+$checks[] = [
+    'name' => 'PHP binary',
+    'ok' => PHP_BINARY !== '',
+    'detail' => PHP_BINARY,
+];
+
+$checks[] = [
+    'name' => 'server software',
+    'ok' => ($_SERVER['SERVER_SOFTWARE'] ?? '') !== '',
+    'detail' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+];
+
 $dbPath = $config['db_path'] ?? '';
 $dbDir = $dbPath ? dirname($dbPath) : '';
 $checks[] = [
@@ -53,6 +71,20 @@ $checks[] = [
     'ok' => ($config['virustotal_api_key'] ?? '') !== '',
     'detail' => ($config['virustotal_api_key'] ?? '') !== '' ? 'configured' : 'not configured',
 ];
+
+if (isset($_GET['check_vt'])) {
+    $vtCheck = vt_fetch_ip_with_status('8.8.8.8');
+    $detail = (string)($vtCheck['message'] ?? '');
+    if (($vtCheck['status_line'] ?? '') !== '') {
+        $detail .= ' [' . $vtCheck['status_line'] . ']';
+    }
+
+    $checks[] = [
+        'name' => 'VirusTotal connectivity',
+        'ok' => (bool)($vtCheck['ok'] ?? false),
+        'detail' => $detail,
+    ];
+}
 
 $dbOk = false;
 try {
@@ -94,6 +126,8 @@ $allOk = !in_array(false, array_column($checks, 'ok'), true);
         .ok { background: #e8f7ee; color: #146c3e; }
         .bad { background: #ffe8e8; color: #9b1c1c; }
         .muted { color: #687386; }
+        .actions { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+        button { padding: 8px 12px; border: 1px solid #155eef; color: #fff; background: #155eef; border-radius: 6px; cursor: pointer; }
         a { color: #155eef; text-decoration: none; }
     </style>
 </head>
@@ -106,7 +140,14 @@ $allOk = !in_array(false, array_column($checks, 'ok'), true);
         总体状态:
         <span class="tag <?= $allOk ? 'ok' : 'bad' ?>"><?= $allOk ? '正常' : '需要处理' ?></span>
     </p>
-    <p><a href="index.php?token=<?= h((string)$_GET['token']) ?>">返回后台</a></p>
+    <div class="actions">
+        <a href="index.php?token=<?= h((string)$_GET['token']) ?>">返回后台</a>
+        <form method="get">
+            <input type="hidden" name="token" value="<?= h((string)$_GET['token']) ?>">
+            <input type="hidden" name="check_vt" value="1">
+            <button type="submit">测试 VirusTotal 连接</button>
+        </form>
+    </div>
     <table>
         <thead>
         <tr>
