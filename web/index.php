@@ -59,6 +59,7 @@ $adminToken = $_GET['token'];
     <h1>登录监控后台</h1>
 </header>
 <main>
+    <p><a href="health.php?token=<?= h($adminToken) ?>">后台健康检查</a></p>
     <h2>服务器</h2>
     <table>
         <thead>

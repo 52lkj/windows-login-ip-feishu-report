@@ -45,7 +45,7 @@ Run this on the target Linux server:
 
 ```bash
 export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
-curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo bash
+curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo env FEISHU_WEBHOOK_URL="$FEISHU_WEBHOOK_URL" bash
 ```
 
 If you want to force a specific raw file mirror:
@@ -53,7 +53,7 @@ If you want to force a specific raw file mirror:
 ```bash
 export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
 export WLIFF_RAW_BASE="https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main"
-curl -fsSL "$WLIFF_RAW_BASE/install-linux.sh" | sudo bash
+curl -fsSL "$WLIFF_RAW_BASE/install-linux.sh" | sudo env FEISHU_WEBHOOK_URL="$FEISHU_WEBHOOK_URL" WLIFF_RAW_BASE="$WLIFF_RAW_BASE" bash
 ```
 
 The Linux installer creates a systemd timer that sends the report daily at 18:00.
@@ -90,6 +90,12 @@ Open the dashboard:
 https://your-site.example.com/web/index.php?token=replace-with-an-admin-token
 ```
 
+Check backend health:
+
+```text
+https://your-site.example.com/web/health.php?token=replace-with-an-admin-token
+```
+
 ### Linux Agent To Backend
 
 Install the Linux agent with backend reporting enabled:
@@ -97,7 +103,7 @@ Install the Linux agent with backend reporting enabled:
 ```bash
 export WLIFF_BACKEND_URL="https://your-site.example.com/web/ingest.php"
 export WLIFF_INGEST_TOKEN="replace-with-a-long-random-token"
-curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo bash
+curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo env WLIFF_BACKEND_URL="$WLIFF_BACKEND_URL" WLIFF_INGEST_TOKEN="$WLIFF_INGEST_TOKEN" bash
 ```
 
 You can keep Feishu enabled at the same time:
@@ -106,7 +112,7 @@ You can keep Feishu enabled at the same time:
 export FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
 export WLIFF_BACKEND_URL="https://your-site.example.com/web/ingest.php"
 export WLIFF_INGEST_TOKEN="replace-with-a-long-random-token"
-curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo bash
+curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo env FEISHU_WEBHOOK_URL="$FEISHU_WEBHOOK_URL" WLIFF_BACKEND_URL="$WLIFF_BACKEND_URL" WLIFF_INGEST_TOKEN="$WLIFF_INGEST_TOKEN" bash
 ```
 
 ### Windows Agent To Backend
