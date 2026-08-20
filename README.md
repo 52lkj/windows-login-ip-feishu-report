@@ -32,6 +32,13 @@ irm https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/
 .\Get-SuccessfulLoginIPs.ps1 -InstallTask -WebhookUrl "https://open.feishu.cn/open-apis/bot/v2/hook/xxxx"
 ```
 
+To send Windows login events to the web backend:
+
+```powershell
+.\Get-SuccessfulLoginIPs.ps1 -Today -BackendUrl "https://your-site.example.com/web/ingest.php" -IngestToken "replace-with-a-long-random-token"
+.\Get-SuccessfulLoginIPs.ps1 -InstallTask -BackendUrl "https://your-site.example.com/web/ingest.php" -IngestToken "replace-with-a-long-random-token"
+```
+
 ## Linux Quick Deploy
 
 Run this on the target Linux server:
@@ -101,6 +108,18 @@ export WLIFF_BACKEND_URL="https://your-site.example.com/web/ingest.php"
 export WLIFF_INGEST_TOKEN="replace-with-a-long-random-token"
 curl -fsSL https://cdn.jsdelivr.net/gh/52lkj/windows-login-ip-feishu-report@main/install-linux.sh | sudo bash
 ```
+
+### Windows Agent To Backend
+
+Install the Windows agent with backend reporting enabled:
+
+```powershell
+$env:WLIFF_BACKEND_URL = "https://your-site.example.com/web/ingest.php"
+$env:WLIFF_INGEST_TOKEN = "replace-with-a-long-random-token"
+irm https://raw.githubusercontent.com/52lkj/windows-login-ip-feishu-report/main/install.ps1 | iex
+```
+
+You can keep Feishu enabled at the same time by also setting `FEISHU_WEBHOOK_URL`.
 
 ### VirusTotal Enrichment
 

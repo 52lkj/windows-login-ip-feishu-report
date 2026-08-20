@@ -295,14 +295,22 @@ build_backend_payload() {
     local records="$3"
 
     if command -v python3 >/dev/null 2>&1; then
-        HOST="$host" PUBLIC_IP="$publicIp" RECORDS="$records" python3 - <<'PY'
+        local recordsFile
+        recordsFile="$(mktemp)"
+        printf '%s\n' "$records" > "$recordsFile"
+
+        HOST="$host" PUBLIC_IP="$publicIp" RECORDS_FILE="$recordsFile" python3 - <<'PY'
 import json
 import os
 import socket
 
 host = os.environ.get("HOST") or socket.gethostname()
 public_ip = os.environ.get("PUBLIC_IP") or None
-records = os.environ.get("RECORDS") or ""
+records_file = os.environ.get("RECORDS_FILE")
+records = ""
+if records_file:
+    with open(records_file, "r", encoding="utf-8") as handle:
+        records = handle.read()
 events = []
 
 for line in records.splitlines():
@@ -327,6 +335,9 @@ print(json.dumps({
     "events": events,
 }, ensure_ascii=False, separators=(",", ":")))
 PY
+        local status=$?
+        rm -f "$recordsFile"
+        return "$status"
     else
         echo "python3 is required for backend JSON payload generation." >&2
         exit 1

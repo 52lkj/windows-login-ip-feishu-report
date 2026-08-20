@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-Extract successful Windows logon IP addresses from the Security event log and send daily summaries to Feishu.
+Extract successful Windows logon IP addresses from the Security event log and send daily summaries to Feishu or a web backend.
 
 .DESCRIPTION
 Reads Windows Security event ID 4624, extracts the IpAddress field from the
@@ -8,6 +8,7 @@ event XML, and can optionally:
   - install a daily scheduled task that runs at 18:00
   - probe the server's outbound public IP address
   - send a text summary to a Feishu group webhook
+  - post structured login events to the optional PHP web backend
 
 Run PowerShell as Administrator if access to the Security log is denied.
 
@@ -19,6 +20,9 @@ Run PowerShell as Administrator if access to the Security log is denied.
 
 .EXAMPLE
 .\Get-SuccessfulLoginIPs.ps1 -InstallTask -WebhookUrl https://open.feishu.cn/open-apis/bot/v2/hook/xxxx
+
+.EXAMPLE
+.\Get-SuccessfulLoginIPs.ps1 -Today -BackendUrl https://example.com/web/ingest.php -IngestToken your-token
 
 .EXAMPLE
 .\Get-SuccessfulLoginIPs.ps1 -Since (Get-Date).AddDays(-7) -Unique
@@ -34,6 +38,9 @@ param(
     [switch]$IncludeLocal,
     [string]$OutCsv,
     [string]$WebhookUrl,
+    [string]$BackendUrl,
+    [string]$IngestToken,
+    [string]$ServerKey,
     [switch]$InstallTask,
     [string]$TaskName = 'Get-SuccessfulLoginIPs-Daily',
     [string]$TaskTime = '18:00'
@@ -197,6 +204,43 @@ function Build-SummaryText {
     return ($lines -join "`n")
 }
 
+function ConvertTo-BackendPayload {
+    param(
+        [string]$PublicIp,
+        [object[]]$Records,
+        [string]$ServerKey
+    )
+
+    $hostname = [System.Net.Dns]::GetHostName()
+    $resolvedServerKey = if ([string]::IsNullOrWhiteSpace($ServerKey)) { $hostname } else { $ServerKey }
+
+    $events = foreach ($record in $Records) {
+        [pscustomobject]@{
+            source      = 'windows-security-4624'
+            username    = [string]$record.AccountName
+            login_ip    = [string]$record.IpAddress
+            channel     = 'windows'
+            method      = [string]$record.AuthenticationPkg
+            occurred_at = $record.TimeCreated.ToString('o')
+            is_success  = $true
+            details     = @{
+                domain            = [string]$record.Domain
+                logon_type        = [string]$record.LogonType
+                workstation_name  = [string]$record.WorkstationName
+                process_name      = [string]$record.ProcessName
+                event_record_id   = [string]$record.EventRecordId
+            }
+        }
+    }
+
+    return @{
+        server_key       = $resolvedServerKey
+        hostname         = $hostname
+        server_public_ip = $PublicIp
+        events           = @($events)
+    } | ConvertTo-Json -Depth 8 -Compress
+}
+
 function Send-FeishuText {
     param(
         [Parameter(Mandatory = $true)]
@@ -216,19 +260,76 @@ function Send-FeishuText {
     Invoke-RestMethod -Method Post -Uri $WebhookUrl -ContentType 'application/json; charset=utf-8' -Body $body -ErrorAction Stop | Out-Null
 }
 
+function Send-BackendPayload {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BackendUrl,
+        [Parameter(Mandatory = $true)]
+        [string]$IngestToken,
+        [Parameter(Mandatory = $true)]
+        [string]$Json
+    )
+
+    $headers = @{
+        Authorization = "Bearer $IngestToken"
+    }
+    $body = [System.Text.Encoding]::UTF8.GetBytes($Json)
+    Invoke-RestMethod -Method Post -Uri $BackendUrl -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $body -ErrorAction Stop | Out-Null
+}
+
+function Quote-Argument {
+    param([string]$Value)
+
+    if ($null -eq $Value) {
+        return '""'
+    }
+
+    return '"' + ($Value -replace '"', '\"') + '"'
+}
+
 function Register-DailyTask {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ScriptPath,
-        [Parameter(Mandatory = $true)]
         [string]$WebhookUrl,
+        [string]$BackendUrl,
+        [string]$IngestToken,
+        [string]$ServerKey,
         [Parameter(Mandatory = $true)]
         [string]$TaskName,
         [Parameter(Mandatory = $true)]
         [string]$TaskTime
     )
 
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Today -WebhookUrl "{1}"' -f $ScriptPath, $WebhookUrl)
+    $arguments = New-Object System.Collections.Generic.List[string]
+    $arguments.Add('-NoProfile')
+    $arguments.Add('-ExecutionPolicy Bypass')
+    $arguments.Add('-WindowStyle Hidden')
+    $arguments.Add('-File')
+    $arguments.Add((Quote-Argument -Value $ScriptPath))
+    $arguments.Add('-Today')
+
+    if (-not [string]::IsNullOrWhiteSpace($WebhookUrl)) {
+        $arguments.Add('-WebhookUrl')
+        $arguments.Add((Quote-Argument -Value $WebhookUrl))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($BackendUrl)) {
+        $arguments.Add('-BackendUrl')
+        $arguments.Add((Quote-Argument -Value $BackendUrl))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($IngestToken)) {
+        $arguments.Add('-IngestToken')
+        $arguments.Add((Quote-Argument -Value $IngestToken))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ServerKey)) {
+        $arguments.Add('-ServerKey')
+        $arguments.Add((Quote-Argument -Value $ServerKey))
+    }
+
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ($arguments -join ' ')
     $trigger = New-ScheduledTaskTrigger -Daily -At $TaskTime
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
 
@@ -237,8 +338,13 @@ function Register-DailyTask {
 }
 
 if ($InstallTask) {
-    if ([string]::IsNullOrWhiteSpace($WebhookUrl)) {
-        Write-Error 'WebhookUrl is required when installing the scheduled task.'
+    if ([string]::IsNullOrWhiteSpace($WebhookUrl) -and [string]::IsNullOrWhiteSpace($BackendUrl)) {
+        Write-Error 'WebhookUrl or BackendUrl is required when installing the scheduled task.'
+        exit 1
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($BackendUrl) -and [string]::IsNullOrWhiteSpace($IngestToken)) {
+        Write-Error 'IngestToken is required when BackendUrl is used.'
         exit 1
     }
 
@@ -249,7 +355,7 @@ if ($InstallTask) {
     }
 
     try {
-        Register-DailyTask -ScriptPath $scriptPath -WebhookUrl $WebhookUrl -TaskName $TaskName -TaskTime $TaskTime
+        Register-DailyTask -ScriptPath $scriptPath -WebhookUrl $WebhookUrl -BackendUrl $BackendUrl -IngestToken $IngestToken -ServerKey $ServerKey -TaskName $TaskName -TaskTime $TaskTime
     }
     catch {
         if ($_.Exception.Message -match '0x80070005|拒绝访问|Access is denied') {
@@ -284,6 +390,23 @@ if ($WebhookUrl) {
     }
 }
 
+if ($BackendUrl) {
+    if ([string]::IsNullOrWhiteSpace($IngestToken)) {
+        Write-Error 'IngestToken is required when BackendUrl is used.'
+        exit 1
+    }
+
+    try {
+        $payload = ConvertTo-BackendPayload -PublicIp $publicIp -Records $records -ServerKey $ServerKey
+        Send-BackendPayload -BackendUrl $BackendUrl -IngestToken $IngestToken -Json $payload
+        Write-Host 'Backend login report sent.'
+    }
+    catch {
+        Write-Error "Failed to send backend login report. $($_.Exception.Message)"
+        exit 1
+    }
+}
+
 if ($OutCsv) {
     $records | Export-Csv -Path $OutCsv -NoTypeInformation -Encoding UTF8
     Write-Host "Saved: $OutCsv"
@@ -307,7 +430,7 @@ if ($Unique) {
 elseif ($Detailed) {
     $output = $records | Sort-Object TimeCreated -Descending
 }
-elseif ($Today -or $WebhookUrl) {
+elseif ($Today -or $WebhookUrl -or $BackendUrl) {
     $output = $reportText
 }
 else {
@@ -316,6 +439,6 @@ else {
         Sort-Object
 }
 
-if (-not $OutCsv -and -not $WebhookUrl) {
+if (-not $OutCsv -and -not $WebhookUrl -and -not $BackendUrl) {
     $output
 }

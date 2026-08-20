@@ -1,11 +1,18 @@
 $Repository = if ($env:WLIFF_REPOSITORY) { $env:WLIFF_REPOSITORY } else { '52lkj/windows-login-ip-feishu-report' }
 $Branch = if ($env:WLIFF_BRANCH) { $env:WLIFF_BRANCH } else { 'main' }
 $WebhookUrl = $env:FEISHU_WEBHOOK_URL
+$BackendUrl = $env:WLIFF_BACKEND_URL
+$IngestToken = $env:WLIFF_INGEST_TOKEN
+$ServerKey = $env:WLIFF_SERVER_KEY
 $ArchiveUrl = $env:WLIFF_ARCHIVE_URL
 $InstallDir = if ($env:WLIFF_INSTALL_DIR) { $env:WLIFF_INSTALL_DIR } else { Join-Path $env:ProgramData 'windows-login-ip-feishu-report' }
 
-if ([string]::IsNullOrWhiteSpace($WebhookUrl)) {
+if ([string]::IsNullOrWhiteSpace($WebhookUrl) -and [string]::IsNullOrWhiteSpace($BackendUrl)) {
     $WebhookUrl = Read-Host 'Feishu webhook URL'
+}
+
+if (-not [string]::IsNullOrWhiteSpace($BackendUrl) -and [string]::IsNullOrWhiteSpace($IngestToken)) {
+    $IngestToken = Read-Host 'Backend ingest token'
 }
 
 $ErrorActionPreference = 'Stop'
@@ -40,17 +47,39 @@ New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 $installedScriptPath = Join-Path $InstallDir 'Get-SuccessfulLoginIPs.ps1'
 Copy-Item -LiteralPath $scriptPath -Destination $installedScriptPath -Force
 
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installedScriptPath -InstallTask -WebhookUrl $WebhookUrl
+$installArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $installedScriptPath, '-InstallTask')
+if (-not [string]::IsNullOrWhiteSpace($WebhookUrl)) {
+    $installArgs += @('-WebhookUrl', $WebhookUrl)
+}
+if (-not [string]::IsNullOrWhiteSpace($BackendUrl)) {
+    $installArgs += @('-BackendUrl', $BackendUrl, '-IngestToken', $IngestToken)
+}
+if (-not [string]::IsNullOrWhiteSpace($ServerKey)) {
+    $installArgs += @('-ServerKey', $ServerKey)
+}
+
+& powershell.exe @installArgs
 if ($LASTEXITCODE -ne 0) {
     throw 'Installer failed. Please rerun PowerShell as Administrator.'
 }
 
 Write-Host "Installed script: $installedScriptPath"
 
-Write-Host 'Sending Feishu test message...'
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installedScriptPath -Today -WebhookUrl $WebhookUrl
-if ($LASTEXITCODE -ne 0) {
-    throw 'Feishu test message failed. Please check the webhook URL and network access.'
+Write-Host 'Sending test report...'
+$testArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $installedScriptPath, '-Today')
+if (-not [string]::IsNullOrWhiteSpace($WebhookUrl)) {
+    $testArgs += @('-WebhookUrl', $WebhookUrl)
+}
+if (-not [string]::IsNullOrWhiteSpace($BackendUrl)) {
+    $testArgs += @('-BackendUrl', $BackendUrl, '-IngestToken', $IngestToken)
+}
+if (-not [string]::IsNullOrWhiteSpace($ServerKey)) {
+    $testArgs += @('-ServerKey', $ServerKey)
 }
 
-Write-Host 'Feishu test message sent.'
+& powershell.exe @testArgs
+if ($LASTEXITCODE -ne 0) {
+    throw 'Test report failed. Please check the webhook/backend URL, token, and network access.'
+}
+
+Write-Host 'Test report sent.'
